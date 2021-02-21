@@ -25,15 +25,14 @@ try
 		-Name "mcconnell" `
         -ResourceGroupName "Analysis-Services"
 
-    "Check to see if its running, and pause if it is"
-    if ($mcconnellanalysisservices.State -eq "Succeeded")
+    "Check to see if its paused, and resume if so"
+    "if ($mcconnellanalysisservices.State -eq "Paused")
     {
-        Write-Output "Stopping Analysis Services model..."
+        Write-Output "Starting Analysis Services model..."
 
-        Suspend-AzAnalysisServicesServer `
+        Resume-AzAnalysisServicesServer `
 		    -Name "mcconnell" `
             -ResourceGroupName "Analysis-Services"
-
     }
 }
 catch {

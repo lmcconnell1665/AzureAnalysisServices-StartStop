@@ -1,36 +1,88 @@
-<# This script came from: https://jorgklein.com/2017/10/11/azure-analysis-services-scheduled-autoscaling/
+<#
+.SYNOPSIS
+    Vertically scale up and down or pause/resume an Azure Analysis
+    Services server according to a schedule using Azure Automation.
 
-Can be used to automate scaling of resources and pausing/resuming on a schedule
+.DESCRIPTION
+    This Azure Automation runbook enables vertically scaling or
+    pausing of an Azure Analysis Services server according to a
+    schedule. Autoscaling based on a schedule allows you to scale
+    your solution according to predictable resource demand. For
+    example you could require a high capacity (e.g. S1) on monday
+    during peak hours, while the rest of the week the traffic is
+    decreased allowing you to scale down (e.g. S0). Outside business
+    hours and during weekends you could then pause the server so no
+    charges will be applied. This runbook can be scheduled to run
+    hourly. The code checks the scalingSchedule parameter to decide
+    if scaling needs to be executed, or if the server is in the
+    desired state already and no work needs to be done. The script
+    is time zone aware.
 
+.PARAMETER environmentName
+    Name of Azure Cloud environment. Default is AzureCloud, only change
+    when on Azure Government Cloud, for example AzureUSGovernment.
+
+.PARAMETER resourceGroupName
+    Name of the resource group to which the server is assigned.
+
+.PARAMETER azureRunAsConnectionName
+    Azure Automation Run As account name. Needs to be able to access
+    the $serverName.
+
+.PARAMETER serverName
+    Azure Analysis Services server name.
+
+.PARAMETER scalingSchedule
+    Server Scaling Schedule. It is possible to enter multiple
+    comma separated schedules: [{},{}]
+    Weekdays start at 0 (sunday) and end at 6 (saturday).
+    If the script is executed outside the scaling schedule time slots
+    that you defined, the server will be paused.
+
+.PARAMETER scalingScheduleTimeZone
+    Time Zone of time slots in $scalingSchedule.
+    Available time zones: [System.TimeZoneInfo]::GetSystemTimeZones().
+
+.EXAMPLE
+    -environmentName AzureCloud
+    -resourceGroupName myResourceGroup
+    -azureRunAsConnectionName AzureRunAsConnection
+    -serverName myserver
+    -scalingSchedule [{WeekDays:[1], StartTime:”06:59:59″, StopTime:”17:59:59″, Sku: “B2″}, {WeekDays:[2,3,4,5], StartTime:”06:59:59″, StopTime:”17:59:59”, Sku: “B1”}]
+    -scalingScheduleTimeZone W. Europe Standard Time
+
+.NOTES
+    Author: Jorg Klein
+    Last Update: Nov 2018
 #>
 
 param(
 [parameter(Mandatory=$false)]
 [string] $environmentName = "AzureCloud",
  
-[parameter(Mandatory=$true)]
-[string] $resourceGroupName,
+[parameter(Mandatory=$false)]
+[string] $resourceGroupName = "rg-analysis-services",
  
 [parameter(Mandatory=$false)]
 [string] $azureRunAsConnectionName = "AzureRunAsConnection",
- 
-[parameter(Mandatory=$true)]
-[string] $serverName,
- 
-[parameter(Mandatory=$true)]
-[string] $scalingSchedule,
+
+[parameter(Mandatory=$false)]
+[string] $serverName = "scalingautomation",
+
+[parameter(Mandatory=$false)]
+[string] $scalingSchedule = "[{WeekDays:[1], StartTime:'12:59:59', StopTime:'13:10:59', Sku: 'B2'}, {WeekDays:[2,3,4,5], StartTime:'12:59:59', StopTime:'13:10:00', Sku: 'B1'}]",
  
 [parameter(Mandatory=$false)]
-[string] $scalingScheduleTimeZone = "W. Europe Standard Time"
+[string] $scalingScheduleTimeZone = "Central Standard Time"
 )
  
 filter timestamp {"[$(Get-Date -Format G)]: $_"}
  
 Write-Output "Script started." | timestamp
  
-$VerbosePreference = "Continue"
-$ErrorActionPreference = "Stop"
- 
+#$VerbosePreference = "Continue"
+#$ErrorActionPreference = "Stop"
+
 #Authenticate with Azure Automation Run As account (service principal)
 $runAsConnectionProfile = Get-AutomationConnection -Name $azureRunAsConnectionName
 $environment = Get-AzureRmEnvironment -Name $environmentName
@@ -59,7 +111,8 @@ $dayObjects = $stateConfig | Where-Object {$_.WeekDays -contains $currentDayOfWe
 |Select-Object Sku, `
 @{Name="StartTime"; Expression = {[datetime]::ParseExact(($startTime.ToString("yyyy:MM:dd")+”:”+$_.StartTime),"yyyy:MM:dd:HH:mm:ss", [System.Globalization.CultureInfo]::InvariantCulture)}}, `
 @{Name="StopTime"; Expression = {[datetime]::ParseExact(($startTime.ToString("yyyy:MM:dd")+”:”+$_.StopTime),"yyyy:MM:dd:HH:mm:ss", [System.Globalization.CultureInfo]::InvariantCulture)}}
- 
+
+
 # Get the server object
 $asSrv = Get-AzureRmAnalysisServicesServer -ResourceGroupName $resourceGroupName -Name $serverName
 Write-Output "AAS server name: $($asSrv.Name)" | timestamp
@@ -124,3 +177,4 @@ else # Scaling schedule not found for this day
 }  
  
 Write-Output "Script finished." | timestamp
+ 

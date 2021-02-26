@@ -1,3 +1,5 @@
+# script docs: https://jorgklein.com/2017/10/11/azure-analysis-services-scheduled-autoscaling/
+
 <#
 .SYNOPSIS
     Vertically scale up and down or pause/resume an Azure Analysis
